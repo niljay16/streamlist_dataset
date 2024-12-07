@@ -67,44 +67,55 @@ else:
 
 if username and uploaded_file:
     data = pd.read_csv(uploaded_file)
+    
+    # Normalize column names
+    data.columns = data.columns.str.strip().str.lower()
+    
     st.write("Preview of Dataset:")
     st.dataframe(data.head())
+    
+    st.write("Columns in the uploaded dataset:")
+    st.write(data.columns)
+    
+    # Default transaction and item columns based on normalized names
+    transaction_col = st.sidebar.text_input("Enter Transaction Column Name:", "invoiceno")
+    item_col = st.sidebar.text_input("Enter Item Column Name:", "description")
 
-    st.sidebar.header("Dataset Configuration")
-    transaction_col = st.sidebar.text_input("Enter Transaction Column Name:", "InvoiceNo")
-    item_col = st.sidebar.text_input("Enter Item Column Name:", "Description")
+    if transaction_col not in data.columns or item_col not in data.columns:
+        st.error(f"Dataset must contain '{transaction_col}' and '{item_col}' columns. Please check column names.")
+    else:
+        st.sidebar.header("Settings")
+        min_support = st.sidebar.slider("Min Support", 0.01, 1.0, 0.05)
+        min_threshold = st.sidebar.slider("Min Confidence", 0.01, 1.0, 0.5)
+        metric = st.sidebar.selectbox("Metric", ['confidence', 'lift', 'leverage', 'conviction'])
 
-    st.sidebar.header("Settings")
-    min_support = st.sidebar.slider("Min Support", 0.01, 1.0, 0.05)
-    min_threshold = st.sidebar.slider("Min Confidence", 0.01, 1.0, 0.5)
-    metric = st.sidebar.selectbox("Metric", ['confidence', 'lift', 'leverage', 'conviction'])
+        try:
+            frequent_itemsets, rules = mine_association_rules(data, transaction_col, item_col, min_support, metric, min_threshold)
 
-    try:
-        frequent_itemsets, rules = mine_association_rules(data, transaction_col, item_col, min_support, metric, min_threshold)
+            st.subheader("Frequent Itemsets")
+            st.write(frequent_itemsets)
 
-        st.subheader("Frequent Itemsets")
-        st.write(frequent_itemsets)
+            st.subheader("Association Rules")
+            st.write(rules)
 
-        st.subheader("Association Rules")
-        st.write(rules)
+            st.subheader("Top Frequent Itemsets")
+            fig = plot_frequent_itemsets(frequent_itemsets)
+            st.plotly_chart(fig)
 
-        st.subheader("Top Frequent Itemsets")
-        fig = plot_frequent_itemsets(frequent_itemsets)
-        st.plotly_chart(fig)
+            st.subheader("Association Rules Network")
+            plt = plot_rules_network(rules)
+            st.pyplot(plt)
 
-        st.subheader("Association Rules Network")
-        plt = plot_rules_network(rules)
-        st.pyplot(plt)
+            st.subheader("Top Product Bundles to Recommend")
+            recommendations = generate_recommendations(rules)
+            st.write(recommendations)
 
-        st.subheader("Top Product Bundles to Recommend")
-        recommendations = generate_recommendations(rules)
-        st.write(recommendations)
-
-    except ValueError as e:
-        st.error(f"Error: {e}")
+        except ValueError as e:
+            st.error(f"Error: {e}")
 
 else:
     if not username:
         st.warning("Please log in to enable dataset upload.")
     elif not uploaded_file:
         st.info("Please upload a dataset to proceed.")
+
