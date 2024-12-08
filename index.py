@@ -1,121 +1,205 @@
 import streamlit as st
 import pandas as pd
 from mlxtend.frequent_patterns import apriori, association_rules
-import plotly.express as px
-import networkx as nx
 import matplotlib.pyplot as plt
+import seaborn as sns
+import networkx as nx
 
+# Titanic Themed Background Styling
+def set_titanic_theme():
+    st.markdown(
+        """
+        <style>
+        /* Background Gradient */
+        .stApp {
+            background: linear-gradient(120deg, #002f4b, #dcdddf);
+            color: white;
+        }
 
-def mine_association_rules(data, transaction_col, item_col, min_support, metric, min_threshold):
-    if transaction_col not in data.columns or item_col not in data.columns:
-        raise ValueError(f"Dataset must contain '{transaction_col}' and '{item_col}' columns.")
+        /* Sidebar Background */
+        section[data-testid="stSidebar"] {
+            background-color: #004e7c;
+            border-right: 2px solid white;
+        }
 
-    # Create the basket (transaction vs item matrix)
-    basket = data.groupby([transaction_col, item_col])[item_col].count().unstack().fillna(0)
-    basket = (basket > 0).astype(int)
+        /* Text Colors */
+        .stTextInput > div > label, .stButton > button {
+            color: #fff !important;
+        }
 
-    # Apply Apriori algorithm
-    frequent_itemsets = apriori(basket, min_support=min_support, use_colnames=True)
-    rules = association_rules(frequent_itemsets, metric=metric, min_threshold=min_threshold)
-    return frequent_itemsets, rules
+        /* Input and Button Styling */
+        .stTextInput > div > input {
+            background-color: #007ea7;
+            color: white !important;
+            border: 2px solid #002f4b !important;
+            border-radius: 5px !important;
+        }
+        .stButton > button {
+            background-color: #005082;
+            color: white;
+            border-radius: 10px;
+            padding: 0.5rem 1rem;
+            font-size: 1rem;
+        }
+        .stButton > button:hover {
+            background-color: #007ea7;
+        }
 
+        /* Table Styling */
+        .dataframe {
+            background-color: white;
+            color: black;
+            border-radius: 10px;
+        }
 
-def plot_frequent_itemsets(frequent_itemsets, top_n=10):
-    frequent_itemsets['itemsets_str'] = frequent_itemsets['itemsets'].apply(lambda x: ', '.join(list(x)))
-    top_items = frequent_itemsets.nlargest(top_n, 'support')
-    fig = px.bar(top_items, x='itemsets_str', y='support', title='Top Frequent Itemsets', 
-                 labels={'itemsets_str': 'Itemsets', 'support': 'Support'})
-    return fig
+        /* Plot Background */
+        div[data-testid="stPlotlyChart"], div[data-testid="stImage"] > img {
+            background-color: white;
+            padding: 10px;
+            border-radius: 10px;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
+# Apply the Titanic Theme
+set_titanic_theme()
 
-def plot_rules_network(rules):
-    G = nx.DiGraph()
-    for _, rule in rules.iterrows():
-        G.add_edge(tuple(rule['antecedents']), tuple(rule['consequents']), weight=rule['lift'])
+# Page Title
+st.title("🚢 Titanic Dashboard")
 
-    pos = nx.spring_layout(G)
-    plt.figure(figsize=(12, 8))
-    nx.draw_networkx(G, pos, with_labels=True, node_size=7000, font_size=10, node_color='lightblue', edge_color='gray')
-    plt.title("Association Rules Network")
-    return plt
+# Sidebar for Login
+st.sidebar.header("Login")
 
+# Create a session state variable for the username
+if "username" not in st.session_state:
+    st.session_state.username = None
 
-def generate_recommendations(rules):
-    recommendations = rules[['antecedents', 'consequents', 'support', 'confidence']].head(5)
-    return recommendations
-
-
-# Streamlit App
-st.sidebar.title("User Login")
-username = st.sidebar.text_input("Enter your username:", value="", placeholder="Type your name")
-
-if username:
-    st.sidebar.markdown(f"**Logged in as:** {username}")
+# Login Section
+if not st.session_state.username:
+    username = st.sidebar.text_input("Enter a username")
+    if st.sidebar.button("Log In"):
+        if username:
+            st.session_state.username = username
+            st.sidebar.success(f"Logged in as: {st.session_state.username}")
+        else:
+            st.sidebar.error("Please enter a username.")
 else:
-    st.sidebar.info("Please enter your username to proceed.")
+    st.sidebar.write(f"Logged in as: {st.session_state.username}")
+    if st.sidebar.button("Log Out"):
+        st.session_state.username = None
 
-st.title("Insights Dashboard Using Association Rule Mining")
-if username:
-    st.markdown(f"Welcome, **{username}**! Explore your dataset below.")
-else:
-    st.info("Please enter your username in the sidebar.")
+# Main Application Logic
+if st.session_state.username:
+    # File Upload Section
+    st.sidebar.header("Upload Your Dataset")
+    uploaded_file = st.sidebar.file_uploader("Browse files", type=["csv"])
 
-if username:
-    uploaded_file = st.file_uploader("Upload your dataset (CSV format)", type="csv")
-else:
-    st.info("Please provide a username to enable file upload.")
+    if uploaded_file is not None:
+        # Load the uploaded dataset
+        data = pd.read_csv(uploaded_file)
+        st.write(f"### Welcome, {st.session_state.username}!")
+        st.write("### Preview of the Uploaded Dataset:")
+        st.dataframe(data.head())
 
-if username and uploaded_file:
-    data = pd.read_csv(uploaded_file)
-    
-    # Normalize column names
-    data.columns = data.columns.str.strip().str.lower()
-    
-    st.write("Preview of Dataset:")
-    st.dataframe(data.head())
-    
-    st.write("Columns in the uploaded dataset:")
-    st.write(data.columns)
-    
-    # Default transaction and item columns based on normalized names
-    transaction_col = st.sidebar.text_input("Enter Transaction Column Name:", "invoiceno")
-    item_col = st.sidebar.text_input("Enter Item Column Name:", "description")
+        # Graph Stats: Sex and Age
+        if "Sex" in data.columns:
+            st.write("### Sex Distribution")
+            sex_counts = data["Sex"].value_counts()
+            fig, ax = plt.subplots()
+            sns.barplot(x=sex_counts.index, y=sex_counts.values, ax=ax, palette="viridis")
+            ax.set_title("Sex Distribution")
+            ax.set_xlabel("Sex")
+            ax.set_ylabel("Count")
+            st.pyplot(fig)
+        else:
+            st.warning("The dataset does not contain a 'Sex' column.")
 
-    if transaction_col not in data.columns or item_col not in data.columns:
-        st.error(f"Dataset must contain '{transaction_col}' and '{item_col}' columns. Please check column names.")
+        if "Age" in data.columns:
+            st.write("### Age Group Distribution")
+            # Create age groups
+            data["Age Group"] = pd.cut(data["Age"], bins=[0, 18, 30, 45, 60, 100], 
+                                       labels=["0-18", "19-30", "31-45", "46-60", "60+"])
+            age_group_counts = data["Age Group"].value_counts().sort_index()
+            fig, ax = plt.subplots()
+            sns.barplot(x=age_group_counts.index, y=age_group_counts.values, ax=ax, palette="viridis")
+            ax.set_title("Age Group Distribution")
+            ax.set_xlabel("Age Group")
+            ax.set_ylabel("Count")
+            st.pyplot(fig)
+        else:
+            st.warning("The dataset does not contain an 'Age' column.")
+
+        # Data Preparation for Association Rule Mining
+        st.write("### Preparing Data for Association Rule Mining")
+        st.write("Dataset dimensions:", data.shape)
+
+        # Ensure binary encoding for the dataset
+        def preprocess_data(df):
+            """
+            Preprocess the dataset to create a one-hot encoded binary matrix.
+            Assumes the dataset contains transactional data where each column
+            is an item, and the value indicates the quantity or presence.
+            """
+            # Attempt to convert all values to numeric; non-convertible values will be set to NaN
+            df = df.apply(pd.to_numeric, errors="coerce")
+
+            # Fill NaN values with 0
+            df.fillna(0, inplace=True)
+
+            # Convert all positive values to 1 (presence) and zeros/negatives to 0 (absence)
+            binary_encoded_df = df.applymap(lambda x: 1 if x > 0 else 0)
+
+            return binary_encoded_df
+
+        # Handle missing values and preprocess the data
+        preprocessed_data = preprocess_data(data)
+        st.write("Preprocessed Data (Binary Encoded):")
+        st.dataframe(preprocessed_data.head())
+
+        # Perform Frequent Itemsets Mining
+        st.write("### Frequent Itemsets Mining")
+        min_support = st.sidebar.slider("Minimum Support", 0.01, 1.0, 0.05)
+        frequent_itemsets = apriori(preprocessed_data, min_support=min_support, use_colnames=True)
+        st.write(frequent_itemsets)
+
+        # Generate Association Rules
+        st.write("### Association Rules")
+        metric = st.sidebar.selectbox("Select Metric for Rule Filtering", ["support", "confidence", "lift"])
+        threshold = st.sidebar.slider("Threshold", 0.1, 1.0, 0.5)
+
+        # Calculate the number of itemsets
+        num_itemsets = len(frequent_itemsets)
+
+        # Pass num_itemsets to association_rules()
+        rules = association_rules(frequent_itemsets, num_itemsets=num_itemsets, metric=metric, min_threshold=threshold)
+        st.write(rules)
+
+        # Visualize Rules
+        st.write("### Visualizations")
+        st.write("#### Network Diagram of Rules")
+        G = nx.DiGraph()
+        for index, rule in rules.iterrows():
+            antecedent = tuple(rule["antecedents"])
+            consequent = tuple(rule["consequents"])
+            G.add_edge(antecedent, consequent, weight=rule[metric])
+
+        pos = nx.spring_layout(G)
+        plt.figure(figsize=(10, 6))
+        nx.draw(G, pos, with_labels=True, node_size=2000, node_color="lightblue", font_size=10, font_weight="bold")
+        st.pyplot(plt)
+
+        st.write("#### Support and Confidence Bar Chart")
+        plt.figure(figsize=(10, 6))
+        rules.plot(kind="bar", x="support", y="confidence", title="Support vs Confidence")
+        st.pyplot(plt)
+
+        # Recommendations
+        st.write("### Product Recommendations")
+        st.write("Explore frequently bought-together products and optimize cross-selling strategies.")
+
     else:
-        st.sidebar.header("Settings")
-        min_support = st.sidebar.slider("Min Support", 0.01, 1.0, 0.05)
-        min_threshold = st.sidebar.slider("Min Confidence", 0.01, 1.0, 0.5)
-        metric = st.sidebar.selectbox("Metric", ['confidence', 'lift', 'leverage', 'conviction'])
-
-        try:
-            frequent_itemsets, rules = mine_association_rules(data, transaction_col, item_col, min_support, metric, min_threshold)
-
-            st.subheader("Frequent Itemsets")
-            st.write(frequent_itemsets)
-
-            st.subheader("Association Rules")
-            st.write(rules)
-
-            st.subheader("Top Frequent Itemsets")
-            fig = plot_frequent_itemsets(frequent_itemsets)
-            st.plotly_chart(fig)
-
-            st.subheader("Association Rules Network")
-            plt = plot_rules_network(rules)
-            st.pyplot(plt)
-
-            st.subheader("Top Product Bundles to Recommend")
-            recommendations = generate_recommendations(rules)
-            st.write(recommendations)
-
-        except ValueError as e:
-            st.error(f"Error: {e}")
-
+        st.write("Please upload a dataset to begin!")
 else:
-    if not username:
-        st.warning("Please log in to enable dataset upload.")
-    elif not uploaded_file:
-        st.info("Please upload a dataset to proceed.")
-
+    st.write("Please log in to access the application.")
