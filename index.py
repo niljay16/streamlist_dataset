@@ -67,7 +67,7 @@ def set_titanic_theme():
 set_titanic_theme()
 
 # Page Title
-st.title("🚢 Titanic Dashboard")
+st.title("🚢 Titanic-Themed Insights Dashboard")
 
 # Sidebar for Login
 st.sidebar.header("Login")
@@ -130,6 +130,19 @@ if st.session_state.username:
             st.pyplot(fig)
         else:
             st.warning("The dataset does not contain an 'Age' column.")
+
+        # Graph Stats: Survival
+        if "Survived" in data.columns:
+            st.write("### Survival Distribution")
+            survival_counts = data["Survived"].value_counts()
+            fig, ax = plt.subplots()
+            sns.barplot(x=survival_counts.index, y=survival_counts.values, ax=ax, palette="viridis")
+            ax.set_title("Survival Distribution")
+            ax.set_xlabel("Survived (0 = No, 1 = Yes)")
+            ax.set_ylabel("Count")
+            st.pyplot(fig)
+        else:
+            st.warning("The dataset does not contain a 'Survived' column.")
 
         # Data Preparation for Association Rule Mining
         st.write("### Preparing Data for Association Rule Mining")
